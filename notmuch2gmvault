@@ -1,0 +1,34 @@
+#!/usr/bin/env python
+import notmuch, json, time, os, shutil
+
+db = notmuch.Database()
+gmvault_db = os.path.expanduser('~/gmvault-db')
+
+for i, msg in enumerate(db.create_query('').search_messages()):
+  tags = map(str, msg.get_tags())
+
+  if 'deleted' in tags: continue # gmvault doesn't support Trash or Spam
+  
+  # Special labels: \Inbox, \Important, \Sent, \Spam, \Starred
+  # Flags: \Seen
+  flags = ['\Seen']
+  labels = []
+
+  for tag in tags:
+    if tag == 'inbox': labels.append('\Inbox')
+    elif tag == 'sent': labels.append('\Sent')
+    elif tag == 'flagged': labels.append('\Starred')
+    elif tag == 'unread': flags.remove('\Seen')
+    else: labels.append(tag)
+
+  meta = { 'internal_date': msg.get_date(), 'subject': '',
+	   'flags': flags, 'labels': labels }
+
+  basename = '{0}/db/{1.tm_year:04}-{1.tm_mon:02}/{2}' \
+    .format(gmvault_db, time.gmtime(msg.get_date()), i)
+
+  dirname = os.path.dirname(basename)
+  if not os.path.isdir(dirname): os.makedirs(dirname)
+
+  json.dump(meta, open(basename+'.meta', 'w'))
+  shutil.copyfile(msg.get_filename(), basename+'.eml')
